@@ -1,8 +1,6 @@
-
 import os
 import json
-import tkinter as tk
-from tkinter import ttk, messagebox
+import streamlit as st
 import pandas as pd
 import numpy as np
 import threading
@@ -32,92 +30,68 @@ def iniciar_interface(df, cache):
             "PT Bazin": 80
         }
 
-    janela = tk.Tk()
-    janela.title("Monitor de Investimentos")
-    janela.state('zoomed')
+    # Configurar o título da aplicação
+    st.title("Monitor de Investimentos")
 
-    frame_principal = tk.Frame(janela)
-    frame_principal.pack(fill="both", expand=True)
+    # Menu lateral com botões de ação
+    with st.sidebar:
+        st.header("Ações")
 
-    menu_lateral = tk.Frame(frame_principal, width=200, bg="#1f2937")
-    menu_lateral.pack(side="left", fill="y")
+        # Botão Salvar
+        if st.button("💾 Salvar"):
+            salvar_dados(df)
+            st.success("Dados salvos com sucesso!")
 
-    conteudo = tk.Frame(frame_principal, bg="white")
-    conteudo.pack(side="right", fill="both", expand=True)
+        # Botão Exportar PDF
+        if st.button("📄 Exportar PDF"):
+            exportar_pdf(df)
+            st.success("PDF exportado com sucesso!")
 
-    # Frame para botões de ação
-    frame_botoes = tk.Frame(menu_lateral, bg="#1f2937")
-    frame_botoes.pack(side="bottom", fill="x", pady=10)
-
-    btn_salvar = tk.Button(frame_botoes, text="💾 Salvar", command=lambda: salvar_dados(df),
-                           bg="#10b981", fg="white", relief="flat", font=("Segoe UI", 10))
-    btn_salvar.pack(fill="x", pady=5)
-
-    btn_exportar = tk.Button(frame_botoes, text="📄 Exportar PDF", command=lambda: exportar_pdf(df),
-                             bg="#3b82f6", fg="white", relief="flat", font=("Segoe UI", 10))
-    btn_exportar.pack(fill="x", pady=5)
-
-    def inicializar_precos():
-        def tarefa():
-            status_var.set("Atualizando cotações...")
+        # Botão Atualizar Cotações
+        def inicializar_precos():
+            status_placeholder = st.empty()
+            status_placeholder.info("Atualizando cotações...")
             # Aqui você pode inserir lógica real depois
-            status_var.set("Cotações atualizadas!")
-        threading.Thread(target=tarefa, daemon=True).start()
+            status_placeholder.success("Cotações atualizadas!")
 
-    btn_atualizar = tk.Button(frame_botoes, text="🔄 Atualizar Cotações",
-                              command=inicializar_precos,
-                              bg="#f59e0b", fg="black", relief="flat", font=("Segoe UI", 10))
-    btn_atualizar.pack(fill="x", pady=5)
+        if st.button("🔄 Atualizar Cotações"):
+            # Executar a atualização em uma thread para não bloquear a interface
+            threading.Thread(target=inicializar_precos, daemon=True).start()
 
     # Abas da interface
-    botoes_secoes = ["Ações", "Gráficos", "Análise Geral"]
-    frames_secoes = {}
+    tab_names = ["Ações", "Gráficos", "Análise Geral"]
+    tabs = st.tabs(tab_names)
 
-    def mostrar_secao(secao):
-        for f in frames_secoes.values():
-            f.pack_forget()
-        frames_secoes[secao].pack(fill="both", expand=True)
-        if secao == "Gráficos":
-            atualizar_graficos(frames_secoes["Gráficos"], df)
-        elif secao == "Análise Geral":
-            atualizar_analise(frames_secoes["Análise Geral"], df)
-
-    for nome in botoes_secoes:
-        btn = tk.Button(menu_lateral, text=nome, anchor="w", padx=20, pady=10,
-                        relief="flat", fg="white", bg="#1f2937", activeforeground="white",
-                        bd=0, font=("Segoe UI", 10, "bold"),
-                        command=lambda n=nome: mostrar_secao(n))
-        btn.pack(padx=10, pady=6)
-        frames_secoes[nome] = tk.Frame(conteudo)
-
-    # Tabela
-    colunas_para_mostrar = list(col_widths.keys())
-    tabela_acoes = ttk.Treeview(frames_secoes["Ações"], columns=colunas_para_mostrar,
-                                show="headings", selectmode="browse")
-    for col in colunas_para_mostrar:
-        tabela_acoes.heading(col, text=col)
-        tabela_acoes.column(col, width=col_widths.get(col, 80), anchor="center")
-
-    scroll_y = ttk.Scrollbar(frames_secoes["Ações"], orient="vertical", command=tabela_acoes.yview)
-    tabela_acoes.configure(yscrollcommand=scroll_y.set)
-
-    tabela_acoes.pack(side="left", fill="both", expand=True)
-    scroll_y.pack(side="right", fill="y")
-
-    def atualizar_tabela():
-        for i in tabela_acoes.get_children():
-            tabela_acoes.delete(i)
+    # Seção Ações (Tabela)
+    with tabs[0]:
+        # Tabela
+        colunas_para_mostrar = list(col_widths.keys())
         df_exibicao = df.apply(formatar_valores, axis=1)
-        for _, row in df_exibicao.iterrows():
-            valores = [row[col] for col in colunas_para_mostrar]
-            tabela_acoes.insert("", "end", values=valores)
+        df_exibicao = df_exibicao[colunas_para_mostrar]
 
-    status_var = tk.StringVar()
-    status_var.set("Pronto")
-    status_bar = tk.Label(janela, textvariable=status_var, bd=1, relief="sunken", anchor="w")
-    status_bar.pack(side="bottom", fill="x")
+        # Exibir a tabela com Streamlit
+        st.dataframe(
+            df_exibicao,
+            use_container_width=True,
+            column_config={col: st.column_config.Column(width=col_widths.get(col, 80)) for col in colunas_para_mostrar}
+        )
 
-    mostrar_secao("Ações")
-    atualizar_tabela()
+    # Seção Gráficos
+    with tabs[1]:
+        # Placeholder para os gráficos
+        graficos_placeholder = st.empty()
+        atualizar_graficos(graficos_placeholder, df)
 
-    janela.mainloop()
+    # Seção Análise Geral
+    with tabs[2]:
+        # Placeholder para a análise
+        analise_placeholder = st.empty()
+        atualizar_analise(analise_placeholder, df)
+
+    # Barra de status
+    status_var = st.session_state.get("status", "Pronto")
+    st.info(f"Status: {status_var}")
+
+# Para garantir que o status persista entre interações
+if "status" not in st.session_state:
+    st.session_state["status"] = "Pronto"
